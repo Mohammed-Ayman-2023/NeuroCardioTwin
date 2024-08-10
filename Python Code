@@ -1,0 +1,221 @@
+import tkinter as tk
+from tkinter import messagebox, filedialog
+import matplotlib.pyplot as plt
+import os
+import time
+import csv
+import json
+
+class PatientMetrics:
+    def __init__(self):
+        self.data_records = [["timestamp", "heart_rate", "systolic_bp", "diastolic_bp", "eeg", "nirs"]]
+        self.alert_messages = []
+
+    def add_metrics(self, heart_rate, systolic_bp, diastolic_bp, eeg_value, nirs_value):
+        new_record = [
+            time.time(),
+            heart_rate,
+            systolic_bp,
+            diastolic_bp,
+            eeg_value,
+            nirs_value
+        ]
+        self.data_records.append(new_record)
+
+        if heart_rate > 100:
+            self.alert_messages.append(f"High heart rate: {heart_rate} bpm")
+        if systolic_bp > 140:
+            self.alert_messages.append(f"High systolic BP: {systolic_bp} mmHg")
+        if diastolic_bp > 90:
+            self.alert_messages.append(f"High diastolic BP: {diastolic_bp} mmHg")
+
+    def save_data(self, file_path):
+        with open(file_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerows(self.data_records)
+        print(f"Data saved to {file_path}")
+
+    def load_data(self, file_path):
+        with open(file_path, mode='r') as file:
+            reader = csv.reader(file)
+            self.data_records = list(reader)
+        print(f"Data loaded from {file_path}")
+
+    def export_data(self, file_path, file_type):
+        if file_type == 'csv':
+            self.save_data(file_path)
+        elif file_type == 'json':
+            with open(file_path, mode='w') as file:
+                json.dump([dict(zip(self.data_records[0], record)) for record in self.data_records[1:]], file)
+        elif file_type == 'excel':
+            try:
+                import openpyxl
+                from openpyxl import Workbook
+                workbook = Workbook()
+                sheet = workbook.active
+                for record in self.data_records:
+                    sheet.append(record)
+                workbook.save(file_path)
+            except ImportError:
+                print("Please install 'openpyxl' to export to Excel.")
+        print(f"Data exported to {file_path}")
+
+    def import_data(self, file_path, file_type):
+        if file_type == 'csv':
+            self.load_data(file_path)
+        elif file_type == 'json':
+            with open(file_path, mode='r') as file:
+                json_data = json.load(file)
+                self.data_records = [list(json_data[0].keys())] + [list(record.values()) for record in json_data]
+        elif file_type == 'excel':
+            try:
+                import openpyxl
+                workbook = openpyxl.load_workbook(file_path)
+                sheet = workbook.active
+                self.data_records = []
+                for row in sheet.iter_rows(values_only=True):
+                    self.data_records.append(list(row))
+            except ImportError:
+                print("Please install 'openpyxl' to import from Excel.")
+        print(f"Data imported from {file_path}")
+
+    def get_alerts(self):
+        return self.alert_messages
+
+class MetricsMonitorApp:
+    def __init__(self, root):
+        self.root = root
+        self.metrics = PatientMetrics()
+
+        self.root.title("Health Monitor")
+        self.setup_gui()
+
+    def setup_gui(self):
+        tk.Label(self.root, text="Heart Rate (bpm):").pack(padx=10, pady=5)
+        self.heart_rate_input = tk.Entry(self.root)
+        self.heart_rate_input.pack(padx=10, pady=5)
+
+        tk.Label(self.root, text="Blood Pressure (systolic/diastolic mmHg):").pack(padx=10, pady=5)
+        self.bp_input = tk.Entry(self.root)
+        self.bp_input.pack(padx=10, pady=5)
+
+        tk.Label(self.root, text="EEG Data:").pack(padx=10, pady=5)
+        self.eeg_input = tk.Entry(self.root)
+        self.eeg_input.pack(padx=10, pady=5)
+
+        tk.Label(self.root, text="NIRS Data:").pack(padx=10, pady=5)
+        self.nirs_input = tk.Entry(self.root)
+        self.nirs_input.pack(padx=10, pady=5)
+
+        tk.Button(self.root, text="Add Metrics", command=self.add_metrics).pack(padx=10, pady=5)
+        tk.Button(self.root, text="Show Graphs", command=self.show_graphs).pack(padx=10, pady=5)
+        tk.Button(self.root, text="View Alerts", command=self.show_alerts).pack(padx=10, pady=5)
+        tk.Button(self.root, text="Export Data", command=self.export_data).pack(padx=10, pady=5)
+        tk.Button(self.root, text="Import Data", command=self.import_data).pack(padx=10, pady=5)
+        tk.Button(self.root, text="Save Data", command=self.save_data).pack(padx=10, pady=5)
+        tk.Button(self.root, text="Load Data", command=self.load_data).pack(padx=10, pady=5)
+
+    def add_metrics(self):
+        heart_rate_input = self.heart_rate_input.get()
+        bp_input = self.bp_input.get()
+        eeg_input = self.eeg_input.get()
+        nirs_input = self.nirs_input.get()
+
+        if heart_rate_input.isdigit() and bp_input.count('/') == 1:
+            bp_values = bp_input.split('/')
+            
+            if bp_values[0].isdigit() and bp_values[1].isdigit():
+                heart_rate = int(heart_rate_input)
+                systolic = int(bp_values[0])
+                diastolic = int(bp_values[1])
+
+                if self.is_valid_float(eeg_input) and self.is_valid_float(nirs_input):
+                    eeg_value = float(eeg_input)
+                    nirs_value = float(nirs_input)
+                    self.metrics.add_metrics(heart_rate, systolic, diastolic, eeg_value, nirs_value)
+                else:
+                    messagebox.showerror("Input Error", "Please enter valid numbers for EEG and NIRS.")
+            else:
+                messagebox.showerror("Input Error", "Please enter valid numbers for systolic and diastolic blood pressure.")
+        else:
+            messagebox.showerror("Input Error", "Please enter valid numbers for heart rate and blood pressure.")
+
+    def is_valid_float(self, value):
+        if value.replace('.', '', 1).isdigit():
+            return True
+        return False
+
+    def show_graphs(self):
+        if len(self.metrics.data_records) <= 1:
+            messagebox.showinfo("No Data", "No data available to plot.")
+            return
+
+        timestamps = [record[0] for record in self.metrics.data_records[1:]]
+        heart_rates = [record[1] for record in self.metrics.data_records[1:]]
+        systolic_bps = [record[2] for record in self.metrics.data_records[1:]]
+        diastolic_bps = [record[3] for record in self.metrics.data_records[1:]]
+        eeg_values = [record[4] for record in self.metrics.data_records[1:]]
+        nirs_values = [record[5] for record in self.metrics.data_records[1:]]
+
+        plt.figure(figsize=(10, 8))
+
+        plt.subplot(4, 1, 1)
+        plt.plot(timestamps, heart_rates, color='red')
+        plt.ylabel('Heart Rate (bpm)')
+        plt.title('Metrics Over Time')
+        plt.grid(True)
+
+        plt.subplot(4, 1, 2)
+        plt.plot(timestamps, systolic_bps, color='blue')
+        plt.ylabel('Systolic BP (mmHg)')
+        plt.grid(True)
+
+        plt.subplot(4, 1, 3)
+        plt.plot(timestamps, diastolic_bps, color='green')
+        plt.ylabel('Diastolic BP (mmHg)')
+        plt.grid(True)
+
+        plt.subplot(4, 1, 4)
+        plt.plot(timestamps, eeg_values, color='purple', label='EEG')
+        plt.plot(timestamps, nirs_values, color='orange', label='NIRS')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Neurovascular Data')
+        plt.legend()
+        plt.grid(True)
+
+        plt.tight_layout()
+        plt.show()
+
+    def show_alerts(self):
+        alerts = self.metrics.get_alerts()
+        if alerts:
+            messagebox.showinfo("Alerts", "\n".join(alerts))
+        else:
+            messagebox.showinfo("No Alerts", "No alerts at this time.")
+
+    def export_data(self):
+        file_path = filedialog.asksaveasfilename(defaultextension='.csv', filetypes=[('CSV files', '*.csv'), ('JSON files', '*.json'), ('Excel files', '*.xlsx')])
+        if file_path:
+            file_type = os.path.splitext(file_path)[1].lstrip('.')
+            self.metrics.export_data(file_path, file_type)
+
+    def import_data(self):
+        file_path = filedialog.askopenfilename(filetypes=[('CSV files', '*.csv'), ('JSON files', '*.json'), ('Excel files', '*.xlsx')])
+        if file_path:
+            file_type = os.path.splitext(file_path)[1].lstrip('.')
+            self.metrics.import_data(file_path, file_type)
+
+    def save_data(self):
+        file_path = filedialog.asksaveasfilename(defaultextension='.csv', filetypes=[('CSV files', '*.csv')])
+        if file_path:
+            self.metrics.save_data(file_path)
+
+    def load_data(self):
+        file_path = filedialog.askopenfilename(filetypes=[('CSV files', '*.csv')])
+        if file_path:
+            self.metrics.load_data(file_path)
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = MetricsMonitorApp(root)
+    root.mainloop()
